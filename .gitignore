@@ -1,5 +1,6 @@
 *.py[cod]
-
+#filter filesystem
+data/
 # C extensions
 *.so
 
