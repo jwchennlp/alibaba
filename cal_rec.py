@@ -2,94 +2,135 @@
 #coding:utf-8
 import numpy as np
 import pickle
-import func
 
-#获取推荐列表
-def cal_rec(similarity,buy_user_item,click_user_item,collect_user_item,cart_user_item,weight_rec,user_id,k):
-    rec={}
-    for user in user_id:
-        rec[user]={}
-    #获取推荐用户列表
-    rec_user=get_rec_user(similarity,user_id,k)
-    #获取推荐商品列表
-    rec_item=get_rec_item(rec_user,buy_user_item)
-    #计算推荐物品的概率
-    rec_item_pro=cal_rec_item_pro(rec_user,rec_item,buy_user_item,click_user_item,collect_user_item,cart_user_item,weight_rec,similarity,user_id)
-    pickle.dump(rec_user,open('./data/rec_user','wb'))
-    pickle.dump(rec_item,open('./data/rec_item','wb'))
-    pickle.dump(rec_item_pro,open('./data/rec_item_pro','wb'))
-    return rec_item_pro
+def write(dic,filename):
+    f=open('./data/'+filename,'wb')
+    pickle.dump(dic,f)
 
-#获取推荐用户列表
-def get_rec_user(similarity,user_id,k):
-    rec_user={}
-    for user in user_id.keys():
-        rec_user[user]={}
-    for user in similarity.keys():
-        if len(similarity[user])<=k:
-            rec_user[user]=similarity[user]
+def cal_rec(trainUI,sim_train,k):
+    #第一步，根据设定的K值，求出跟用户相似度最大的用户列表
+    topKU = cal_topKU(sim_train,k)
+    #第二步，获取topk个相似的用户喜欢且本身未购买的商品
+    #首先，需要对用户-商品向量进行处理，只考虑购买行为(效果不好)
+    #buyUI = cal_buyUI(trainUI)
+    #下便便是寻找那些用户未购买，而其相似用户购买的物品
+    recI = cal_recI(topKU,trainUI)
+    #接下来便是根据推荐列表和用户相似度，计算给用户推荐某一物品的概率
+    proI = cal_proI(recI,topKU,trainUI)
+    return proI
+    
+#计算跟用户相似度最大的前k个用户列表
+def cal_topKU(sim_train,k):
+    topKU={}
+    for u1 in sim_train.keys():
+        topKU[u1] = {}
+        if len(sim_train[u1]) <= k :
+            topKU[u1] = sim_train[u1]
         else:
-            user_list=sorted(similarity[user],key=similarity[user].get,reverse=True)
-            user_list=user_list[0:k-1]
-            for user_j in user_list:
-                rec_user[user][user_j]=similarity[user][user_j]
-    return rec_user
+            u = sorted(sim_train[u1],key = sim_train[u1].get,reverse=True)
+            u = u[0:k-1]
+            for u2 in u:
+                topKU[u1][u2] = sim_train[u1][u2]
+    return topKU
 
-#获取推荐商品列表
-def get_rec_item(rec_user,buy_user_item):
-    rec_item={}
-    for user in buy_user_item.keys():
-        rec_item[user]={}
-        for user_j in rec_user[user].keys():
-            if user == user_j:
-                continue
-            else:
-                for item in buy_user_item[user_j].keys():
-                    if item not in buy_user_item[user].keys():
-                        if item not in rec_item[user].keys():
-                            rec_item[user][item] = 1
-    return rec_item
+#对用户-商品向量进行处理，只考虑购买行为
+def cal_buyUI(trainUI):
+    buyUI = {}
+    for u1 in trainUI.keys():
+        buyUI[u1] = {}
+        item = sorted(trainUI[u1],key=trainUI[u1].get,reverse=True)
+        for i in item:
+            if trainUI[u1][i] == 4:
+                buyUI[u1][i] = 4
+            else :
+                break
+    return buyUI
 
-#计算物品的概率
-def cal_rec_item_pro(rec_user,rec_item,buy_user_item,click_user_item,collect_user_item,cart_user_item,weight_rec,similarity,user_id):
-    rec_item_pro={}
-    rec_item_count={}
-    #buy_user_item_count=func.get_user_item_count(buy_user_item,user_id)
-    #click_user_item_count=func.get_user_item_count(click_user_item,user_id)
-    for user in rec_user.keys():
-        rec_item_pro[user]={}
-        rec_item_count[user]={}
-        for user_j in rec_user[user].keys():
-            for item in rec_item[user].keys():
-                if item in buy_user_item[user_j].keys():
-                    if item in rec_item_pro[user].keys():
-                        rec_item_pro[user][item] += similarity[user][user_j]*weight_rec[1]
-                        rec_item_count[user][item] += 1
-                    else:
-                        rec_item_pro[user][item] = similarity[user][user_j]*weight_rec[1]
-                        rec_item_count[user][item] = 1
-                if item in click_user_item[user_j].keys():
-                    if item in rec_item_pro[user].keys():
-                        print user,user_j,similarity[user][user_j],click_user_item[user_j][item]
-                        rec_item_pro[user][item] += similarity[user][user_j]*weight_rec[0]
-                        rec_item_count[user][item] += 1
-                    else:
-                        rec_item_pro[user][item] = similarity[user][user_j]*weight_rec[0]
-                        rec_item_count[user][item] = 1
-                if item in collect_user_item[user_j].keys():
-                    if item in rec_item_pro[user].keys():
-                        rec_item_pro[user][item] += similarity[user][user_j]*weight_rec[2]
-                        rec_item_count[user][item] += 1
-                    else:
-                        rec_item_pro[user][item] = similarity[user][user_j]*weight_rec[2]
-                        rec_item_count[user][item] = 1
-                if item in cart_user_item[user_j].keys():
-                    if item in rec_item_pro[user].keys():
-                        rec_item_pro[user][item] += similarity[user][user_j]*weight_rec[3]
-                        rec_item_count[user][item] += 1
-                    else:
-                        rec_item_pro[user][item] = similarity[user][user_j]*weight_rec[3]
-                        rec_item_count[user][item] = 1
+#下面便计算推荐的物品列表
+def cal_recI(topKU,buyUI):
+    recI = {}
+    for u1 in topKU.keys():
+        recI[u1] = {}
+        #获取相似用户列表
+        u = topKU[u1].keys()
+        for u2 in u:
+            #获取相似用户的购买列表
+            item = buyUI[u2].keys()
+            for i in item:
+                #若相似用户购买商品用户未买过
+                if i not in buyUI[u1].keys():
+                    recI[u1][i] = 1
+    return recI
 
-    return rec_item_pro
+#根据用户相似度，和推荐列表计算推荐某一物品的概率
+def cal_proI(recI,topKU,buyUI):
+    proI = {}
+    for u1 in recI.keys():
+        proI[u1] = {}
+        #跟用户相似的用户列表
+        for u2 in topKU[u1].keys():
+            #为用户推荐的物品列表
+            for i in recI[u1].keys():
+                #如果推荐物品在相似用户的购买行为中
+                if i in buyUI[u2].keys():
+                    if i in proI[u1].keys():
+                        proI[u1][i] += topKU[u1][u2]
+                    else :
+                        proI[u1][i] = topKU[u1][u2]
+    write(proI,'proI')
+    return proI
 
+#对最后确定的推荐列表，设定对每个用户推荐的用户的个数
+def setnumber(proI,i_numer):
+    result={}
+    for u1 in proI.keys():
+        result[u1] = {}
+        length = len(proI[u1])
+        if length <= i_numer:
+            result[u1] = proI[u1]
+        else:
+            item = sorted(proI[u1],key=proI[u1].get,reverse=True)
+            item = item[0:i_numer-1]
+            for i in item:
+                result[u1][i] = proI[u1][i]
+    write(result,'result')
+    return result
+
+#查看准确率，召回率和F值
+def cal_result(result,testBUI):
+    #查看命中的用户-物品
+    hitUI = cal_hitUI(result,testBUI)
+    #计算准确率
+    precision,hitbrand,pbrand = cal_precision(hitUI,result)
+    #计算召回率
+    recall,bbrand = cal_recall(hitUI,testBUI,hitbrand)
+    F=2*precision*recall/(precision+recall)
+    precision = str(precision*100)+'%'
+    recall = str(recall*100)+'%'
+    F = str(F*100)+'%'
+    return (precision,recall,F,hitbrand,pbrand,bbrand)
+    
+def cal_hitUI(result,testBUI):
+    hitUI={}
+    for u1 in result.keys():
+        hitUI[u1] = 0
+        for i in result[u1].keys():
+            if i in testBUI[u1].keys():
+                hitUI[u1] += 1
+    return hitUI
+
+#计算准确率
+def cal_precision(hitUI,result):
+    hitbrand = 0
+    pbrand = 0
+    for u in hitUI.keys():
+        hitbrand += hitUI[u]
+        pbrand += len(result[u])
+    return (float(hitbrand)/float(pbrand),hitbrand,pbrand)
+
+#计算召回率
+def cal_recall(hitUI,testBUI,hitbrand):
+    bbrand = 0
+    for user in testBUI.keys():
+        bbrand += len(testBUI[user])
+    return (float(hitbrand)/float(bbrand),bbrand)
