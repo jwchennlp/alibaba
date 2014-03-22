@@ -1,99 +1,120 @@
 #!/usr/bin/env python 
 #coding:utf-8
 
-import numpy as np
 import pandas as pd 
-import func
+import numpy as np
+from pandas import *
 import pickle
 import math
+'''
+功能模块的实现
+'''
 
+#处理数据
+def process_data():
+    data=pd.read_csv('./data/train.csv')
+    #data=data.drop_duplicates(cols=['user_id','brand_id','type'])
+    data=data[['user_id','brand_id','type','month','day']]
+    #将数据切割成训练集和测试集
+    train,test=divide_data(data)
+    train = np.array(train)
+    test = np.array(test)
+    data=np.array(data)
+    
+    user_id=pickle.load(open('./data/user_id','rb'))
+    
+    trainUI = construct_vector(train,user_id)
+    testUI = construct_vector(test,user_id)
+    data = construct_vector(data,user_id)
+    
+    length_train=cal_length(trainUI)
+    length_data=cal_length(data)
+    
+    sim_train = cal_sim(trainUI,user_id,length_train)
+    sim_data = cal_sim(data,user_id,length_data)
+
+    write(trainUI,'trainUI')
+    write(testUI,'testUI')
+    write(data,'data')
+    write(sim_train,'sim_train')
+    write(sim_data,'sim_data')
+
+#写入数据
+def write(dic,filename):
+    f=open('./data/'+filename,'wb')
+    pickle.dump(dic,f)
+    f.close()
+
+#将数据切分成训练集和测试集两部分
+def divide_data(data):
+    a=data.month==7
+    b=data.day<=15
+    c=data.month<7
+    train=data[(a&b)|c]
+    
+    a=data.month==7
+    d=data.day>15
+    e=data.month==8
+    test=data[(a&d)|e]
+    return (train,test)
+
+#对数据建立用户物品的向量
+def construct_vector(data,user_id):
+    print data.shape
+    UIvector = {}
+    for user in user_id:
+        UIvector[user] = {}
+    for i in range(len(data)):
+        if data[i][1] not in UIvector[data[i][0]].keys():
+            UIvector[data[i][0]][data[i][1]] = item_weight(data[i][2])
+        else :
+            UIvector[data[i][0]][data[i][1]] = max(UIvector[data[i][0]][data[i][1]],item_weight(data[i][2]))
+    return UIvector
 
 #计算用户之间的相似度
-def cal_sim(buy,click,collect,cart,buy_count,click_count,collect_count,cart_count,weight,user_id):
-    #首先计算每个用户的各种行为的总次数
-    behavior_count={}
-    for user in buy_count.keys():
-        behavior_count[user]=buy_count[user]+click_count[user]+collect_count[user]+cart_count[user]
-    #计算各种行为的用户之间的交集
-    buy_same_item_count=cal_same_item_count(buy,user_id)
-    click_same_item_count=cal_same_item_count(click,user_id)
-    collect_same_item_count=cal_same_item_count(collect,user_id)
-    cart_same_item_count=cal_same_item_count(cart,user_id)
-
-    #将上述四种行为的交集的结果进行累加
-    same_item_count=add_same_item_count(buy_same_item_count,click_same_item_count,collect_same_item_count,cart_same_item_count,weight,user_id)
-    
-    similarity=cal_similarity(same_item_count,behavior_count)
-    
-    #同时将所得到的信息存储起来
-    write(similarity,'similarity')
-    write(same_item_count,'same_item_count')
-    write(behavior_count,'behavior_count_dic')
-    return similarity
-
-
-#计算用户间购买行为的交集
-def cal_same_item_count(item_user,user_id):
-    same_item_count={}
-    for user in user_id.keys():
-        same_item_count[user]={}
-    for item in item_user.keys():
-        for user_i in item_user[item].keys():
-            for user_j in item_user[item].keys():
-                if user_i == user_j:
-                    continue
-                else:
-                    if user_j in same_item_count[user_i].keys():
-                        same_item_count[user_i][user_j] += item_user[item][user_i]*item_user[item][user_j]
-                    else:
-                        same_item_count[user_i][user_j] = item_user[item][user_i]*item_user[item][user_j]
-    return same_item_count
-
-#四种购买行为交集的累加
-def add_same_item_count(buy_same_item_count,click_same_item_count,collect_same_item_count,cart_same_item_count,weight,user_id):
-    same_item_count={}
-    for user in user_id.keys():
-        same_item_count[user]={}
-    #将点击行为交集，直接赋值，提高运算
-    for user_i in click_same_item_count.keys():
-        for user_j in click_same_item_count[user_i].keys():
-            if user_j in same_item_count[user_i].keys():
-                same_item_count[user_i][user_j] += weight[0]*click_same_item_count[user_i][user_j]
+def cal_sim(user_item,user_id,length):
+    sim={}
+    for user in user_id:
+        sim[user]={}
+        for user_j in user_item.keys():
+            if user == user_j:
+                continue
             else:
-                same_item_count[user_i][user_j] = weight[0]*click_same_item_count[user_i][user_j]
-    for user_i in buy_same_item_count.keys():
-        for user_j in buy_same_item_count[user_i].keys():
-            if user_j in same_item_count[user_i].keys():
-                same_item_count[user_i][user_j] += weight[1]*buy_same_item_count[user_i][user_j]
-            else:
-                same_item_count[user_i][user_j] = weight[1]*buy_same_item_count[user_i][user_j]
-        
-    for user_i in collect_same_item_count.keys():
-        for user_j in collect_same_item_count[user_i].keys():
-            if user_j in same_item_count[user_i].keys():
-                same_item_count[user_i][user_j] += weight[2]*collect_same_item_count[user_i][user_j]
-            else:
-                same_item_count[user_i][user_j] = weight[2]*collect_same_item_count[user_i][user_j]
+                #计算用户向量相乘结果
+                count = cal(user_item[user],user_item[user_j])
+                if count >0:
+                    sim[user][user_j] = count/(length[user]*length[user_j])
+    return sim
 
-    for user_i in cart_same_item_count.keys():
-        for user_j in cart_same_item_count[user_i].keys():
-            if user_j in same_item_count[user_i].keys():
-                same_item_count[user_i][user_j] += weight[3]*cart_same_item_count[user_i][user_j]
-            else:
-                same_item_count[user_i][user_j] = weight[3]*cart_same_item_count[user_i][user_j]
-    return same_item_count
+#通过向量计算两个用户之间的相似度
+def cal(u1,u2):
+    count = 0
+    for i1 in u1.keys():
+        if i1 in u2.keys():
+            count += u1[i1]*u2[i1]
+    return count
 
-#计算用户相似度
-def cal_similarity(same_item_count,behavior_count):
-    similarity={}
-    for user_i in same_item_count.keys():
-        similarity[user_i]={}
-        for user_j in same_item_count[user_i].keys():
-            if behavior_count[user_i] == 0 or behavior_count[user_j] == 0 :
-                similarity[user_i][user_j] = 0
-            else:
-                similarity[user_i][user_j] = float(same_item_count[user_i][user_j])/math.sqrt(behavior_count[user_i]*behavior_count[user_j])
-    return similarity
+#计算一个用户向量的长度
+def  cal_length(user_item):
+    length = {}
+    for u in user_item.keys():
+        length[u] = 0
+        value = user_item[u].values()
+        for v in value:
+            length[u] += math.pow(v,2)
+        length[u] = math.sqrt(length[u])
+    return length
 
-def write(dic,file_name):
-    pickle.dump(dic,open('./data/'+file_name,'wb'))
+#在建立用户-物品的向量过程中，行为权重赋值(点击,购买，收藏，购物车对应数值为1,4,2,3)
+def item_weight(k):
+    if k == 0:
+        return 1
+    elif k == 1:
+        return 4
+    elif k == 2:
+        return 2
+    else:
+        return 3
+
+if __name__=="__main__":
+    process_data()
