@@ -7,18 +7,39 @@ def write(dic,filename):
     f=open('./data/'+filename,'wb')
     pickle.dump(dic,f)
 
-def cal_rec(trainUI,sim_train,k):
+def cal_rec(trainUI,sim_train,k,train_mean):
     #第一步，根据设定的K值，求出跟用户相似度最大的用户列表
-    topKU = cal_topKU(sim_train,k)
+    #topKU = cal_topKU(sim_train,k)
     #第二步，获取topk个相似的用户喜欢且本身未购买的商品
     #首先，需要对用户-商品向量进行处理，只考虑购买行为(效果不好)
     #buyUI = cal_buyUI(trainUI)
     #下便便是寻找那些用户未购买，而其相似用户购买的物品
-    recI = cal_recI(topKU,trainUI)
-    #接下来便是根据推荐列表和用户相似度，计算给用户推荐某一物品的概率
-    proI = cal_proI(recI,topKU,trainUI)
-    return proI
+    '''
+    计算推荐物品i的概率
+    '''
+    #先计算推荐的物品集合
+    rec_items=cal_items(trainUI,sim_train)
     
+    pro_items = cal_pro_items(rec_items,trainUI,train_mean,sim_train,k)
+    #recI = cal_recI(topKU,trainUI)
+    #接下来便是根据推荐列表和用户相似度，计算给用户推荐某一物品的概率
+    #proI = cal_proI(recI,topKU,trainUI,train_mean)
+    #return proI
+    write(pro_items,'pro_items')
+    return pro_items
+
+#计算要推荐的物品集合
+def cal_items(trainUI,sim_train):
+    rec_items={}
+    #将相似用户购买的物品加入推荐列表
+    for user in  sim_train.keys():
+        rec_items[user] = []
+        for user_j in sim_train[user].keys():
+            for item in buyUI[user_j].keys():
+                if item not in rec_items[user]:
+                    rec_items[user].append(item)
+    return rec_items
+
 #计算跟用户相似度最大的前k个用户列表
 def cal_topKU(sim_train,k):
     topKU={}
@@ -62,11 +83,40 @@ def cal_recI(topKU,buyUI):
                     recI[u1][i] = 1
     return recI
 
+#计算推荐某一物品的概率
+def  cal_pro_items(rec_items,trainUI,train_mean,sim_train,k):
+    pro_items={}
+    simUV = {}
+    for user in rec_items.keys():
+        pro_items[user] = {}
+        simUV[user] = {}
+        for item in rec_items[user]:
+            pro_items[user][item] = 0
+            simUV[user][item] = 0
+            #计算和用户相似的且购买过物品i的最相似的k个用户
+            sim_user_item = cal_sim_user_item(sim_train[user],trainUI,item,k)
+            for user_j in sim_user_item:
+                pro_items[user][item] += sim_train[user][user_j]*(trainUI[user_j][item] - train_mean[user_j])
+                simUV[user][item] += abs(sim_train[user][user_j])
+            pro_items[user][item] += train_mean[user]
+    return pro_items
+            
+def cal_sim_user_item(sim_user,trainUI,item,k):
+    user = []
+    users = sorted(sim_user,key=sim_user.get,reverse=True)
+    for u in users:
+        if item in trainUI[u].keys():
+            user.append(u)
+    if len(user) >k:
+        user = user[0:k-1]
+    return user
 #根据用户相似度，和推荐列表计算推荐某一物品的概率
-def cal_proI(recI,topKU,buyUI):
+def cal_proI(recI,topKU,buyUI,train_mean):
     proI = {}
+    simUV = {}
     for u1 in recI.keys():
         proI[u1] = {}
+        simUV[u1] = {}
         #跟用户相似的用户列表
         for u2 in topKU[u1].keys():
             #为用户推荐的物品列表
@@ -75,8 +125,16 @@ def cal_proI(recI,topKU,buyUI):
                 if i in buyUI[u2].keys():
                     if i in proI[u1].keys():
                         proI[u1][i] += topKU[u1][u2]
+                        simUV[u1][i] += topKU[u1][u2]
                     else :
                         proI[u1][i] = topKU[u1][u2]
+                        simUV[u1][i] = topKU[u1][u2]
+    '''
+    for u in proI.keys():
+        for i in proI[u].keys():
+            if simUV[u][i] != 0:
+                proI[u][i] += train_mean[u] 
+    '''
     write(proI,'proI')
     return proI
 
