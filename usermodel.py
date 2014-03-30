@@ -14,7 +14,7 @@ def build_user_model(user_item_time,T,day_count):
     for user in user_item_time.keys():
         rec_user_item[user] = {}
         for item in user_item_time[user].keys():
-            #首先判断用户时候买过此物品
+            #首先判断用户是否买过此物品
             temp = is_buy_before(user_item_time[user][item])
             if temp == 0:
                 #根据用户之间的行为记录，计算给用户推荐此物品的概率
@@ -34,9 +34,15 @@ def cal_pro(record,T,day_count):
     pro = 0
     for time in record.keys():
         factor = math.exp(-1/float(T)*(day_count-time))
-        pro += sum(record[time])*factor
+        #再次进行进出，之前对每次用户行为按点击次数来计算概率，现在用sigmoid函数来调整点击次数和其对应的权重
+        #设置权重，其中，点击，购买，收藏，购物车权重分别定为1,4,3,2
+        count = record[time][0]+1*record[time][1]+1*record[time][2]+1*record[time][3]
+        pro += count*factor
     return pro
-        
+
+#将行为次数按照sigmoid函数赋予权重,"效果不好"
+def count_sigmoid(num):
+    return 1/(1+math.exp(-(num-1)))
 def is_buy_before(record):
     for time in record.keys():
         if record[time][1] >= 1:

@@ -113,6 +113,27 @@ def set_rec_item_num(rec_user_item,k):
                 user_item[user][item] = rec_user_item[user][item]
     return user_item
 
+#对推荐列表进行一次测试，推每个用户设定推荐物品的个数，M为是否推荐的限定值
+def set_min_M(rec_user_item,M):
+    user_item = {}
+    for user in rec_user_item.keys():
+        user_item[user] = {}
+        for item in rec_user_item[user].keys():
+            if rec_user_item[user][item] >= M:
+                user_item[user][item] = rec_user_item[user][item]
+    #如果只进行上一步的处理，可能对用户推荐列表物品为0的情况，所以，对这些用户，至少取一个推荐结果
+    '''
+    for user in user_item.keys():
+        count = len(user_item[user])
+        if count == 0:
+            items = sorted(rec_user_item[user],key = rec_user_item[user].get,reverse = True)
+            items = items[0:1]
+            for item in items:
+                user_item[user][item] = rec_user_item[user][item]
+    '''
+    return user_item
+   
+
 #计算准确率，召回率，F值等参数
 def cal_hit_user_item(rec_user_item,test_u_i):
     hit_user_item = {}
@@ -141,6 +162,15 @@ def cal_result(rec_user_item,test_u_i,hit_user_item):
     return (precision,recall,F,hitbrand,pbrand,bbrand)
         
 #查看为用户推荐物品的个数分布
+def check_distribuction(rec_user_item):
+    dis = {}
+    for user in rec_user_item.keys():
+        count = len(rec_user_item[user])
+        if count in dis.keys():
+            dis[count] += 1
+        else:
+            dis[count] =1
+    print dis
 def distribution(rec_user_item):
     items = [7868,2683,11196,8869,14020]
     for user in rec_user_item.keys():
