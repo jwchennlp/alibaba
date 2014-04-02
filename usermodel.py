@@ -9,7 +9,7 @@ import math
 '''
 
 #建立用户模型
-def build_user_model(user_item_time,T,day_count):
+def build_user_model(user_item_time,item_factor,day_count):
     rec_user_item = {}
     for user in user_item_time.keys():
         rec_user_item[user] = {}
@@ -18,12 +18,12 @@ def build_user_model(user_item_time,T,day_count):
             temp = is_buy_before(user_item_time[user][item])
             if temp == 0:
                 #根据用户之间的行为记录，计算给用户推荐此物品的概率
-                rec_user_item[user][item] = cal_pro(user_item_time[user][item],T,day_count)
+                rec_user_item[user][item] = cal_pro(user_item_time[user][item],item_factor[item],day_count)
             else:
                 #对于用户购买过得物品，首先将购买之前的序列都删除，再考虑在此时间之后是否存在点击等行为
                 record = delete_buy_before(user_item_time[user][item])
                 if len(record) > 0:
-                    rec_user_item[user][item] = cal_pro(record,T,day_count)
+                    rec_user_item[user][item] = cal_pro(record,item_factor[item],day_count)
     return rec_user_item
 
 '''
@@ -36,7 +36,7 @@ def cal_pro(record,T,day_count):
         factor = math.exp(-1/float(T)*(day_count-time))
         #再次进行进出，之前对每次用户行为按点击次数来计算概率，现在用sigmoid函数来调整点击次数和其对应的权重
         #设置权重，其中，点击，购买，收藏，购物车权重分别定为1,4,3,2
-        count = record[time][0]+1*record[time][1]+1*record[time][2]+1*record[time][3]
+        count = record[time][0]+2.5*record[time][1]+1.5*record[time][2]+2*record[time][3]
         pro += count*factor
     return pro
 
@@ -58,6 +58,7 @@ def delete_buy_before(record):
             del(record[time])
             break
     for time in record.keys():
-        del(record[time])
-        break
+        if record[time][0] > 0 :
+            del(record[time])
+            break
     return record

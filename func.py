@@ -100,44 +100,15 @@ def build_user_item(test,user_id):
     return user_item
      
 #对推荐列表进行处理，对每个用户设定推荐的物品的个数，K为设定的物品的个数
-def set_rec_item_num(rec_user_item,k,M):
-    '''
-    此处进行修改，主要进行如下操作，查看对每个用户推荐物品的概率，如果推荐的物品推荐值大于1的物品大于5个，这直接取5个，如果推荐的物品的推荐值大于1的物品不足五个，则推荐推荐值大于1的物品
-    '''
-    #用户推荐物品序列大于1的物品个数词典
-    rec_item_big_1 = {}
-    #主要实现的功能是统计对每个用户的推荐列表中，推荐值大于M的物品的个数
-    for user in rec_user_item.keys():
-        count = 0 
-        rec_values = sorted(rec_user_item[user].values(),reverse = True)
-        for value in rec_values:
-            if value > M:
-                count += 1
-            else:
-                break
-        rec_item_big_1[user] = count 
-
+def set_rec_item_num(rec_user_item,k):
     user_item = {}
     for user in rec_user_item.keys():
         user_item[user] = {}
-        #首先当对用户的推荐物品长度大于K时
-        if len(rec_user_item[user]) > k:
-            #当对间的物品列表中对物品推荐值大于M的物品的个数
-            if rec_item_big_1[user] >= k:
-                items = sorted(rec_user_item[user],key = rec_user_item[user].get,reverse = True)
-                items = items[0:k]
-                for item in items:
-                    user_item[user][item] = rec_user_item[user][item]
-            else:
-                items = sorted(rec_user_item[user],key = rec_user_item[user].get,reverse = True)
-                #此处做了一下处理，当推荐值小于限定最小推荐值M的个数小雨K个时，会额外推荐一个物品概率小于M值的物品
-                items = items[0:rec_item_big_1[user]+1]
-                for item  in items:
-                    user_item[user][item] = rec_user_item[user][item]
-        #当对用户体检物品的长度小于K时
+        if len(rec_user_item[user]) <= k:
+            user_item[user] = rec_user_item[user]
         else:
-            items = sorted(rec_user_item[user],key = rec_user_item[user].get,reverse = True)
-            items = items[0:rec_item_big_1[user]+1]
+            items = sorted(rec_user_item[user],key = rec_user_item[user].get,reverse=True)
+            items = items[0:k]
             for item in items:
                 user_item[user][item] = rec_user_item[user][item]
     return user_item
@@ -160,9 +131,22 @@ def set_min_M(rec_user_item,M):
             for item in items:
                 user_item[user][item] = rec_user_item[user][item]
     '''
-    return user_item
-   
+    return (user_item,rec_user_item)
 
+#冷启动
+def cal_cold_start(rec_user_item,former_rec,item_time):
+    for user in rec_user_item.keys():
+        if len(rec_user_item[user]) == 0:
+            if len(former_rec[user]) >0 :
+                items = sorted(former_rec[user],key=former_rec[user].get,reverse = True)
+                item_pop = {}
+                for item in items:
+                    item_pop[item] = len(item_time[item])
+                items = sorted(item_pop,key=item_pop.get,reverse = True)
+                rec_user_item[user][items[0]] = former_rec[user][items[0]]
+                
+    return rec_user_item
+        
 #计算准确率，召回率，F值等参数
 def cal_hit_user_item(rec_user_item,test_u_i):
     hit_user_item = {}
@@ -199,7 +183,10 @@ def check_distribuction(rec_user_item):
             dis[count] += 1
         else:
             dis[count] =1
-    print dis
+    res = 0
+    for user,count in dis.items():
+        res += user*count
+    print dis,res
 def distribution(rec_user_item):
     items = [7868,2683,11196,8869,14020]
     for user in rec_user_item.keys():
@@ -208,23 +195,8 @@ def distribution(rec_user_item):
             for i in range(count):
                 rec_user_item[user][items[i]] = 'add'
     return rec_user_item
-#查看推荐的物品的分布情况
-def look_distribuction(rec_user_item,K):
-    dis = {}
-    for i in range(0,K+1):
-        dis[i] = 0
-    for user in rec_user_item.keys():
-        dis[len(rec_user_item[user])] += 1
-    print dis
 
 def getresult(rec_user_item):
-    #对于那些推荐物品为0的用户，主要是只存在购买行为，没有点击行为
-    rec_user_item[8327250][14917] = 'add'
-    rec_user_item[6458000][1681] = 'add'
-    rec_user_item[3001000][21995] = 'add'
-    rec_user_item[12027000][2322] = 'add'
-    rec_user_item[4054000][11304] = 'add'
-    rec_user_item[9035750][7868] = 'add'
     f=open('./data/result.txt','wb')
     rec={}
     for user in rec_user_item.keys():
